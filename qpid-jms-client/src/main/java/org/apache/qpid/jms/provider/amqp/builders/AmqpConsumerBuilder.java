@@ -46,6 +46,7 @@ import org.apache.qpid.jms.provider.exceptions.ProviderInvalidDestinationExcepti
 import org.apache.qpid.jms.provider.exceptions.ProviderUnsupportedOperationException;
 import org.apache.qpid.proton.amqp.DescribedType;
 import org.apache.qpid.proton.amqp.Symbol;
+import org.apache.qpid.proton.amqp.UnknownDescribedType;
 import org.apache.qpid.proton.amqp.messaging.Accepted;
 import org.apache.qpid.proton.amqp.messaging.Modified;
 import org.apache.qpid.proton.amqp.messaging.Rejected;
@@ -251,9 +252,16 @@ public class AmqpConsumerBuilder extends AmqpResourceBuilder<AmqpConsumer, AmqpS
         }
 
         if (resourceInfo.getSelector() != null && !resourceInfo.getSelector().trim().equals("")) {
-            filters.put(JMS_SELECTOR_SYMBOL, new AmqpJmsSelectorType(resourceInfo.getSelector()));
+            if (resourceInfo.getSelector().startsWith("x-opt-offset") || resourceInfo.getSelector().startsWith("x-opt-enqueued-time")) {
+                // support Azure Event HUB filters as used by the IOT Hub
+                // see: https://azure.github.io/amqpnetlite/articles/azure_eventhubs.html
+                Symbol filterKey = Symbol.valueOf("apache.org:selector-filter:string");
+                UnknownDescribedType filterValue = new UnknownDescribedType(filterKey,"amqp.annotation." + resourceInfo.getSelector().trim());
+                filters.put(filterKey, filterValue);
+            } else {
+                filters.put(JMS_SELECTOR_SYMBOL, new AmqpJmsSelectorType(resourceInfo.getSelector()));
+            }
         }
-
         if (!filters.isEmpty()) {
             source.setFilter(filters);
         }
